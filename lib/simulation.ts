@@ -31,13 +31,28 @@ const painForWeek = (week: number): number => {
   return Math.max(1, 1.5 - (week - 12) * 0.08);
 };
 
+// Pooled re-rupture rate for the bin magnitudes (sample-size weighted, non-overlapping cohorts):
+//   Amarasooriya 2020 systematic review (PMID 32091914): 43 / 3091 = 1.4%
+//   ABOS Part II 2017-2020 (PMID 36273792):              50 / 2089 = 2.4%
+//   Lappen 2025 strength athletes (PMID 40182566):        5 /  183 = 2.7%
+//   Pooled:                                              98 / 5363 = 1.83% cumulative
+//
+// Timing distribution (shape of the curve) from the only studies reporting week-of-failure:
+//   Hinchey 2014 (PMID 24774620):        3/3 failures in weeks 1-3
+//   Lappen 2025 (PMID 40182566):         5/5 failures in weeks 4-8 (4 of 5 in chronic repairs)
+//   Return to Play review (PMID 35195840): "all acute repair failures within first 6 weeks"
+//
+// Excluded from rate pooling: PMID 35045595 (re-rupture not separated from infection),
+// PMID 25829956 (n=1 case report), PMID 40868593 (technique selection, no post-op rupture data).
+//
+// Bins reflect: ~50% of failures in weeks 1-3 (Hinchey), ~40% in weeks 4-8 (Lappen, weighted toward
+// chronic — handled separately by chronicRepair multiplier), tail in weeks 9+. Cumulative base ~1.7%
+// for a low-activity acute non-chronic patient, scaling up with the modifiers below.
 const baseWeeklyRisk = (week: number): number => {
-  // Early-window risk anchored to Hinchey et al. 2014 (PMID 24774620): 1.5% re-rupture rate, all within 3 weeks.
-  // Later weeks taper to match overall ~1.4% pooled rate (Amarasooriya et al. 2020 systematic review, PMID 32091914).
-  if (week <= 3) return 0.0015; // Highest risk period
-  if (week <= 8) return 0.0009;
-  if (week <= 12) return 0.00045;
-  return 0.000225;
+  if (week <= 3) return 0.0024;
+  if (week <= 8) return 0.0014;
+  if (week <= 12) return 0.0004;
+  return 0.0001;
 };
 
 const activityMultiplier = (activity: ActivityLevel): number => {
@@ -124,9 +139,18 @@ export const simulateRecovery = (profile: SimulationProfile): WeekResult[] => {
       mobilityPercent,
       painLevel,
       riskScore,
+      forwardRisk: 0,
       recommendedActivity,
       summary,
     });
+  }
+
+  // Forward risk = P(re-injury between this week and week 26 | reached this week safely).
+  // Computed by walking backward and accumulating survival from the tail.
+  let survivalFromHere = 1;
+  for (let i = results.length - 1; i >= 0; i -= 1) {
+    survivalFromHere *= 1 - results[i].riskScore;
+    results[i].forwardRisk = parseFloat((1 - survivalFromHere).toFixed(4));
   }
 
   return results;

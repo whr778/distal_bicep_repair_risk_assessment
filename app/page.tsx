@@ -62,9 +62,9 @@ const scenarioColors: Record<PresetKey, string> = {
 
 const currentProfileColor = '#8b5cf6';
 
-const riskBadge = (risk: number) => {
-  if (risk <= 0.01) return "risk-low";
-  if (risk <= 0.02) return "risk-medium";
+const riskBadge = (forwardRisk: number) => {
+  if (forwardRisk <= 0.005) return "risk-low";
+  if (forwardRisk <= 0.015) return "risk-medium";
   return "risk-high";
 };
 
@@ -128,15 +128,18 @@ export default function Home() {
   const currentProfileData = useMemo(() => ({ preset: 'current' as const, results }), [results]);
 
   const latest = results[results.length - 1];
-  const averageRisk = useMemo(
-    () => results.reduce((sum, week) => sum + week.riskScore, 0) / results.length,
-    [results]
-  );
 
-  const riskChartDatas = useMemo(() => [
-    ...allResults.map(({preset, results}) => ({preset, data: buildChartData(results, w => w.riskScore * 100, 0.2), isCurrent: false})),
-    { preset: 'current' as const, data: buildChartData(currentProfileData.results, w => w.riskScore * 100, 0.2), isCurrent: true }
-  ], [allResults, currentProfileData]);
+  const riskChartDatas = useMemo(() => {
+    const allRiskValues = [
+      ...allResults.flatMap(({results}) => results.map(w => w.forwardRisk * 100)),
+      ...currentProfileData.results.map(w => w.forwardRisk * 100),
+    ];
+    const globalMax = Math.max(2, ...allRiskValues);
+    return [
+      ...allResults.map(({preset, results}) => ({preset, data: buildChartData(results, w => w.forwardRisk * 100, globalMax), isCurrent: false})),
+      { preset: 'current' as const, data: buildChartData(currentProfileData.results, w => w.forwardRisk * 100, globalMax), isCurrent: true }
+    ];
+  }, [allResults, currentProfileData]);
   const strengthChartDatas = useMemo(() => [
     ...allResults.map(({preset, results}) => ({preset, data: buildChartData(results, w => w.tendonStrength, 100), isCurrent: false})),
     { preset: 'current' as const, data: buildChartData(currentProfileData.results, w => w.tendonStrength, 100), isCurrent: true }
@@ -295,8 +298,8 @@ export default function Home() {
               <span>{latest.mobilityPercent}%</span>
             </div>
             <div className="summary-card">
-              <strong>Average weekly re-injury risk</strong>
-              <span>{(averageRisk * 100).toFixed(1)}%</span>
+              <strong>Total re-injury risk over 26 weeks</strong>
+              <span>{(results[0].forwardRisk * 100).toFixed(2)}%</span>
             </div>
           </div>
           <div className="panel" style={{ marginTop: 12 }}>
@@ -313,15 +316,15 @@ export default function Home() {
         <div className="chart-grid">
           <div className="chart-card">
             <div className="chart-header">
-              <p>Risk of re-injury by week</p>
+              <p>Remaining re-injury risk by week</p>
               <span>{`Max plotted risk: ${riskChartDatas[0].data.maxValue.toFixed(1)}%`}</span>
             </div>
-            <svg viewBox="0 0 760 240" className="risk-graph" aria-label="Re-injury risk timeline">
+            <svg viewBox="0 0 760 240" className="risk-graph" aria-label="Remaining re-injury risk timeline">
               <line x1="40" y1="24" x2="40" y2="204" stroke="#cbd5e1" strokeWidth="1" />
               <line x1="40" y1="204" x2="740" y2="204" stroke="#cbd5e1" strokeWidth="1" />
               {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
                 const y = 24 + fraction * 180;
-                const label = `${((1 - fraction) * 0.2).toFixed(1)}%`;
+                const label = `${((1 - fraction) * riskChartDatas[0].data.maxValue).toFixed(1)}%`;
                 return (
                   <g key={fraction}>
                     <line x1="36" y1={y} x2="740" y2={y} stroke="#e2e8f0" strokeWidth="1" />
@@ -433,7 +436,7 @@ export default function Home() {
             <thead>
               <tr>
                 <th scope="col">Week</th>
-                <th scope="col">Risk</th>
+                <th scope="col">Remaining re-injury risk</th>
                 <th scope="col">Rehab phase</th>
                 <th scope="col">Healing phase</th>
                 <th scope="col">Tendon strength</th>
@@ -445,8 +448,8 @@ export default function Home() {
                 <tr key={week.week}>
                   <th scope="row">{week.week}</th>
                   <td>
-                    <span className={riskBadge(week.riskScore)}>
-                      {Math.round(week.riskScore * 1000) / 10}%
+                    <span className={riskBadge(week.forwardRisk)}>
+                      {(week.forwardRisk * 100).toFixed(2)}%
                     </span>
                   </td>
                   <td>{formatPhase(week.rehabPhase)}</td>

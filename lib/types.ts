@@ -18,6 +18,7 @@ export interface WeekResult {
   mobilityPercent: number;
   painLevel: number;
   riskScore: number;
+  forwardRisk: number;
   recommendedActivity: ActivityLevel;
   summary: string;
 }
