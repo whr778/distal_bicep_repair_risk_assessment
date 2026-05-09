@@ -32,10 +32,12 @@ const painForWeek = (week: number): number => {
 };
 
 const baseWeeklyRisk = (week: number): number => {
-  if (week <= 3) return 0.035;
-  if (week <= 8) return 0.022;
-  if (week <= 12) return 0.012;
-  return 0.006;
+  // Early-window risk anchored to Hinchey et al. 2014 (PMID 24774620): 1.5% re-rupture rate, all within 3 weeks.
+  // Later weeks taper to match overall ~1.4% pooled rate (Amarasooriya et al. 2020 systematic review, PMID 32091914).
+  if (week <= 3) return 0.0015; // Highest risk period
+  if (week <= 8) return 0.0009;
+  if (week <= 12) return 0.00045;
+  return 0.000225;
 };
 
 const activityMultiplier = (activity: ActivityLevel): number => {
@@ -102,7 +104,7 @@ export const simulateRecovery = (profile: SimulationProfile): WeekResult[] => {
     weeklyRisk *= activityMultiplier(profile.activityLevel);
     weeklyRisk *= 1 + ((100 - profile.compliance) / 100) * 1.4;
     if (profile.smoker) weeklyRisk *= 1.35;
-    if (profile.chronicRepair) weeklyRisk *= 1.25;
+    if (profile.chronicRepair) weeklyRisk *= 1.5;
     if (rehabPhase === "phase1" && profile.activityLevel !== "none") {
       weeklyRisk *= 1.15;
     }

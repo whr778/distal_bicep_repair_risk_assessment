@@ -164,22 +164,44 @@ button:hover {
   overflow: visible;
 }
 
-.timeline {
+.timeline-table-wrapper {
   margin-top: 18px;
-  display: grid;
-  gap: 12px;
-}
-
-.timeline-item {
+  overflow-x: auto;
   border-radius: 14px;
-  padding: 14px;
-  background: #ffffff;
   border: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
-.timeline-item strong {
-  display: block;
-  margin-bottom: 8px;
+.timeline-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.timeline-table thead {
+  background: #f8fafc;
+}
+
+.timeline-table th,
+.timeline-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.timeline-table tbody tr:last-child th,
+.timeline-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.timeline-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.timeline-table th[scope="row"] {
+  font-weight: 700;
+  color: #111827;
 }
 
 .risk-badge {
@@ -195,6 +217,47 @@ button:hover {
 .risk-low { background: #dcfce7; color: #166534; }
 .risk-medium { background: #fef9c3; color: #854d0e; }
 .risk-high { background: #fee2e2; color: #991b1b; }
+
+.references-tab {
+  margin-top: 24px;
+}
+
+.references-intro {
+  margin-bottom: 24px;
+  color: #64748b;
+}
+
+.references-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 32px;
+}
+
+.references-section-title {
+  margin-bottom: 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.references-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.references-item {
+  margin-bottom: 12px;
+}
+
+.references-link {
+  color: #2563eb;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.references-link:hover {
+  text-decoration: underline;
+}
 
 .visually-hidden {
   position: absolute;

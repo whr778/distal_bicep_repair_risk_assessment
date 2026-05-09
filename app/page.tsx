@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { simulateRecovery } from "@/lib/simulation";
 import { ActivityLevel, SimulationProfile, WeekResult } from "@/lib/types";
+import ReferencesTab from "./ReferencesTab";
 
 type PresetKey = "acute" | "smoker" | "chronic" | "athlete";
 
@@ -50,6 +51,16 @@ const scenarioPresets: Record<PresetKey, SimulationProfile> = {
     braceUsage: false,
   },
 };
+
+const allPresets = Object.keys(scenarioPresets) as PresetKey[];
+const scenarioColors: Record<PresetKey, string> = {
+  acute: '#2563eb',
+  smoker: '#dc2626',
+  chronic: '#16a34a',
+  athlete: '#ca8a04',
+};
+
+const currentProfileColor = '#8b5cf6';
 
 const riskBadge = (risk: number) => {
   if (risk <= 0.01) return "risk-low";
@@ -99,9 +110,11 @@ const buildChartData = (
   return { points, path, maxValue };
 };
 
+
 export default function Home() {
   const [preset, setPreset] = useState<keyof typeof scenarioPresets>("acute");
   const [profile, setProfile] = useState<SimulationProfile>(scenarioPresets.acute);
+  const [activeTab, setActiveTab] = useState<"simulation" | "references">("simulation");
   const [hoveredPoint, setHoveredPoint] = useState<{
     chart: "risk" | "strength";
     week: number;
@@ -111,6 +124,8 @@ export default function Home() {
   } | null>(null);
 
   const results: WeekResult[] = useMemo(() => simulateRecovery(profile), [profile]);
+  const allResults = useMemo(() => allPresets.map(preset => ({ preset, results: simulateRecovery(scenarioPresets[preset]) })), []);
+  const currentProfileData = useMemo(() => ({ preset: 'current' as const, results }), [results]);
 
   const latest = results[results.length - 1];
   const averageRisk = useMemo(
@@ -118,14 +133,14 @@ export default function Home() {
     [results]
   );
 
-  const riskChartData = useMemo(
-    () => buildChartData(results, (week) => week.riskScore * 100, 5),
-    [results]
-  );
-  const strengthChartData = useMemo(
-    () => buildChartData(results, (week) => week.tendonStrength, 100),
-    [results]
-  );
+  const riskChartDatas = useMemo(() => [
+    ...allResults.map(({preset, results}) => ({preset, data: buildChartData(results, w => w.riskScore * 100, 0.2), isCurrent: false})),
+    { preset: 'current' as const, data: buildChartData(currentProfileData.results, w => w.riskScore * 100, 0.2), isCurrent: true }
+  ], [allResults, currentProfileData]);
+  const strengthChartDatas = useMemo(() => [
+    ...allResults.map(({preset, results}) => ({preset, data: buildChartData(results, w => w.tendonStrength, 100), isCurrent: false})),
+    { preset: 'current' as const, data: buildChartData(currentProfileData.results, w => w.tendonStrength, 100), isCurrent: true }
+  ], [allResults, currentProfileData]);
 
   const renderTooltip = (point: { week: number; value: number; x: number; y: number }, chart: "risk" | "strength") => {
     const label = chart === "risk" ? `${point.value.toFixed(1)}% risk` : `${point.value.toFixed(0)}% strength`;
@@ -155,6 +170,43 @@ export default function Home() {
         </p>
       </section>
 
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid #e2e8f0', paddingBottom: '0' }}>
+        <button
+          onClick={() => setActiveTab("simulation")}
+          style={{
+            padding: '12px 24px',
+            border: 'none',
+            background: activeTab === "simulation" ? '#2563eb' : 'transparent',
+            color: activeTab === "simulation" ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: activeTab === "simulation" ? '600' : '500',
+            borderBottom: activeTab === "simulation" ? '3px solid #2563eb' : 'none',
+            transition: 'all 0.2s',
+          }}
+        >
+          Simulation
+        </button>
+        <button
+          onClick={() => setActiveTab("references")}
+          style={{
+            padding: '12px 24px',
+            border: 'none',
+            background: activeTab === "references" ? '#2563eb' : 'transparent',
+            color: activeTab === "references" ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: activeTab === "references" ? '600' : '500',
+            borderBottom: activeTab === "references" ? '3px solid #2563eb' : 'none',
+            transition: 'all 0.2s',
+          }}
+        >
+          References
+        </button>
+      </div>
+
+      {activeTab === "simulation" ? (
+        <>
       <div className="grid-two">
         <section className="panel control-group">
           <h2>Patient profile</h2>
@@ -262,14 +314,14 @@ export default function Home() {
           <div className="chart-card">
             <div className="chart-header">
               <p>Risk of re-injury by week</p>
-              <span>{`Max plotted risk: ${riskChartData.maxValue.toFixed(1)}%`}</span>
+              <span>{`Max plotted risk: ${riskChartDatas[0].data.maxValue.toFixed(1)}%`}</span>
             </div>
             <svg viewBox="0 0 760 240" className="risk-graph" aria-label="Re-injury risk timeline">
               <line x1="40" y1="24" x2="40" y2="204" stroke="#cbd5e1" strokeWidth="1" />
               <line x1="40" y1="204" x2="740" y2="204" stroke="#cbd5e1" strokeWidth="1" />
               {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
                 const y = 24 + fraction * 180;
-                const label = `${Math.round((1 - fraction) * riskChartData.maxValue)}%`;
+                const label = `${((1 - fraction) * 0.2).toFixed(1)}%`;
                 return (
                   <g key={fraction}>
                     <line x1="36" y1={y} x2="740" y2={y} stroke="#e2e8f0" strokeWidth="1" />
@@ -277,40 +329,62 @@ export default function Home() {
                   </g>
                 );
               })}
-              <path d={riskChartData.path} fill="none" stroke="#2563eb" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              {riskChartData.points.map((point) => (
-                <circle
-                  key={point.week}
-                  cx={point.x}
-                  cy={point.y}
-                  r="5"
-                  fill="#2563eb"
-                  opacity="0.9"
-                  onMouseEnter={() => setHoveredPoint({ chart: "risk", week: point.week, value: point.value, x: point.x, y: point.y })}
-                  onMouseLeave={() => setHoveredPoint(null)}
-                />
+              {riskChartDatas.map(({preset, data, isCurrent}) => (
+                <g key={preset}>
+                  <path 
+                    d={data.path} 
+                    fill="none" 
+                    stroke={isCurrent ? currentProfileColor : scenarioColors[preset as PresetKey]} 
+                    strokeWidth={isCurrent ? "4" : "3"} 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                    opacity={isCurrent ? "1" : "0.7"}
+                  />
+                  {data.points.map((point) => (
+                    <circle
+                      key={`${preset}-${point.week}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r={isCurrent ? "5" : "4"}
+                      fill={isCurrent ? currentProfileColor : scenarioColors[preset as PresetKey]}
+                      opacity={isCurrent ? "1" : "0.9"}
+                      onMouseEnter={() => setHoveredPoint({ chart: "risk", week: point.week, value: point.value, x: point.x, y: point.y })}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    />
+                  ))}
+                </g>
               ))}
               {hoveredPoint?.chart === "risk" && renderTooltip(hoveredPoint, "risk")}
-              {riskChartData.points.filter((_, index) => index % 5 === 0).map((point) => (
+              {riskChartDatas[0].data.points.filter((_, index) => index % 5 === 0).map((point) => (
                 <g key={`tick-risk-${point.week}`}>
                   <line x1={point.x} y1="204" x2={point.x} y2="210" stroke="#94a3b8" strokeWidth="1" />
                   <text x={point.x} y="226" fill="#475569" fontSize="10" textAnchor="middle">{point.week}</text>
                 </g>
               ))}
             </svg>
+            <div className="chart-legend">
+              {allPresets.map(preset => (
+                <div key={preset} style={{ color: scenarioColors[preset], marginRight: '16px', display: 'inline-block', opacity: '0.7' }}>
+                  {preset.charAt(0).toUpperCase() + preset.slice(1)}
+                </div>
+              ))}
+              <div style={{ color: currentProfileColor, marginRight: '16px', display: 'inline-block', fontWeight: 'bold' }}>
+                Current Profile
+              </div>
+            </div>
           </div>
 
           <div className="chart-card">
             <div className="chart-header">
               <p>Tendon strength by week</p>
-              <span>{`Max possible strength: ${strengthChartData.maxValue}%`}</span>
+              <span>{`Max possible strength: ${strengthChartDatas[0].data.maxValue}%`}</span>
             </div>
             <svg viewBox="0 0 760 240" className="risk-graph" aria-label="Tendon strength timeline">
               <line x1="40" y1="24" x2="40" y2="204" stroke="#cbd5e1" strokeWidth="1" />
               <line x1="40" y1="204" x2="740" y2="204" stroke="#cbd5e1" strokeWidth="1" />
               {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
                 const y = 24 + fraction * 180;
-                const label = `${Math.round((1 - fraction) * strengthChartData.maxValue)}%`;
+                const label = `${Math.round((1 - fraction) * 100)}%`;
                 return (
                   <g key={fraction}>
                     <line x1="36" y1={y} x2="740" y2={y} stroke="#e2e8f0" strokeWidth="1" />
@@ -318,21 +392,33 @@ export default function Home() {
                   </g>
                 );
               })}
-              <path d={strengthChartData.path} fill="none" stroke="#0f766e" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              {strengthChartData.points.map((point) => (
-                <circle
-                  key={point.week}
-                  cx={point.x}
-                  cy={point.y}
-                  r="5"
-                  fill="#0f766e"
-                  opacity="0.95"
-                  onMouseEnter={() => setHoveredPoint({ chart: "strength", week: point.week, value: point.value, x: point.x, y: point.y })}
-                  onMouseLeave={() => setHoveredPoint(null)}
-                />
+              {strengthChartDatas.map(({preset, data, isCurrent}) => (
+                <g key={preset}>
+                  <path 
+                    d={data.path} 
+                    fill="none" 
+                    stroke={isCurrent ? currentProfileColor : scenarioColors[preset as PresetKey]} 
+                    strokeWidth={isCurrent ? "4" : "3"} 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                    opacity={isCurrent ? "1" : "0.7"}
+                  />
+                  {data.points.map((point) => (
+                    <circle
+                      key={`${preset}-${point.week}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r={isCurrent ? "5" : "4"}
+                      fill={isCurrent ? currentProfileColor : scenarioColors[preset as PresetKey]}
+                      opacity={isCurrent ? "1" : "0.95"}
+                      onMouseEnter={() => setHoveredPoint({ chart: "strength", week: point.week, value: point.value, x: point.x, y: point.y })}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    />
+                  ))}
+                </g>
               ))}
               {hoveredPoint?.chart === "strength" && renderTooltip(hoveredPoint, "strength")}
-              {strengthChartData.points.filter((_, index) => index % 5 === 0).map((point) => (
+              {strengthChartDatas[0].data.points.filter((_, index) => index % 5 === 0).map((point) => (
                 <g key={`tick-strength-${point.week}`}>
                   <line x1={point.x} y1="204" x2={point.x} y2="210" stroke="#94a3b8" strokeWidth="1" />
                   <text x={point.x} y="226" fill="#475569" fontSize="10" textAnchor="middle">{point.week}</text>
@@ -342,23 +428,41 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="timeline">
-          {results.map((week) => (
-            <div key={week.week} className="timeline-item">
-              <strong>Week {week.week}</strong>
-              <div>
-                <span className={riskBadge(week.riskScore)}>
-                  {Math.round(week.riskScore * 1000) / 10}% risk
-                </span>
-              </div>
-              <p>{formatPhase(week.rehabPhase)}</p>
-              <p>Healing: {week.healingPhase}</p>
-              <p>Tendon strength: {week.tendonStrength}%</p>
-              <p>Mobility: {week.mobilityPercent}%</p>
-            </div>
-          ))}
+        <div className="timeline-table-wrapper">
+          <table className="timeline-table">
+            <thead>
+              <tr>
+                <th scope="col">Week</th>
+                <th scope="col">Risk</th>
+                <th scope="col">Rehab phase</th>
+                <th scope="col">Healing phase</th>
+                <th scope="col">Tendon strength</th>
+                <th scope="col">Mobility</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((week) => (
+                <tr key={week.week}>
+                  <th scope="row">{week.week}</th>
+                  <td>
+                    <span className={riskBadge(week.riskScore)}>
+                      {Math.round(week.riskScore * 1000) / 10}%
+                    </span>
+                  </td>
+                  <td>{formatPhase(week.rehabPhase)}</td>
+                  <td>{week.healingPhase}</td>
+                  <td>{week.tendonStrength}%</td>
+                  <td>{week.mobilityPercent}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
+        </>
+      ) : (
+        <ReferencesTab />
+      )}
     </main>
   );
 }
